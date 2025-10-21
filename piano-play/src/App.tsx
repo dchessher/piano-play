@@ -287,6 +287,7 @@ const SONG_LIBRARY: SongPreset[] = [
 ]
 
 const HERO_FALL_TIME = 3.5
+const HERO_PRESPAWN_LEAD = 1
 const HERO_CLEANUP_BUFFER = 0.75
 
 type HeroNoteInstance = {
@@ -295,6 +296,7 @@ type HeroNoteInstance = {
   progress: number
   label: string
   type: 'white' | 'black'
+  leadRatio: number
 }
 
 function App() {
@@ -538,19 +540,23 @@ function App() {
         const note = NOTE_BY_ID.get(event.noteId)
         if (!note) return
 
-        const spawnTime = event.time - HERO_FALL_TIME
+        const heroLeadTime = HERO_PRESPAWN_LEAD * heroPlaybackRate
+        const leadRatio = heroLeadTime / HERO_FALL_TIME
+        const topArrivalTime = event.time - HERO_FALL_TIME
+        const spawnTime = topArrivalTime - heroLeadTime
         const despawnTime = event.time + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
         if (adjustedElapsed < spawnTime || adjustedElapsed > despawnTime) {
           return
         }
 
-        const progress = (adjustedElapsed - spawnTime) / HERO_FALL_TIME
+        const progress = (adjustedElapsed - topArrivalTime) / HERO_FALL_TIME
         active.push({
           id: `${song.id}-${index}`,
           noteId: note.id,
           progress,
           label: note.displayName,
           type: note.type,
+          leadRatio,
         })
       })
 
@@ -633,8 +639,8 @@ function App() {
 
   const renderHeroNotes = (notes: HeroNoteInstance[]) =>
     notes.map((note) => {
-      const clamped = Math.min(Math.max(note.progress, 0), 1)
-      const isVisible = note.progress >= 0 && note.progress <= 1.05
+      const isVisible = note.progress >= -note.leadRatio && note.progress <= 1.05
+      const topPercent = note.progress * 100
       return (
         <button
           key={note.id}
@@ -643,7 +649,7 @@ function App() {
           tabIndex={-1}
           aria-hidden="true"
           disabled
-          style={{ top: `${clamped * 100}%`, opacity: isVisible ? 1 : 0 }}
+          style={{ top: `${topPercent}%`, opacity: isVisible ? 1 : 0 }}
         >
           {note.label}
         </button>

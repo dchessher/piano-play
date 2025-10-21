@@ -9,6 +9,9 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --white-key-height: 240px;
+  --black-key-height: 150px;
+  --key-column-width: 72px;
 }
 
 *,
@@ -25,4 +28,28 @@ body {
 
 a {
   color: inherit;
+}
+
+@media (max-width: 960px) {
+  :root {
+    --white-key-height: 210px;
+    --black-key-height: 130px;
+    --key-column-width: 62px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --white-key-height: 170px;
+    --black-key-height: 110px;
+    --key-column-width: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --white-key-height: 150px;
+    --black-key-height: 95px;
+    --key-column-width: 40px;
+  }
 }

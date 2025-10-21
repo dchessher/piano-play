@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import './App.css'
 
 type NoteDefinition = {
@@ -9,6 +10,18 @@ type NoteDefinition = {
   displayName: string
   frequency: number
   type: 'white' | 'black'
+}
+
+type SongNoteEvent = {
+  time: number
+  noteId: string
+  duration?: number
+}
+
+type SongPreset = {
+  id: string
+  name: string
+  notes: SongNoteEvent[]
 }
 
 type KeyColumn = {
@@ -197,11 +210,90 @@ const ALL_NOTES: NoteDefinition[] = KEYBOARD_LAYOUT.flatMap((column) =>
 )
 
 const KEY_LOOKUP = new Map<string, NoteDefinition>()
+const NOTE_BY_ID = new Map<string, NoteDefinition>()
 ALL_NOTES.forEach((note) => {
   KEY_LOOKUP.set(note.keyTrigger.toLowerCase(), note)
+  NOTE_BY_ID.set(note.id, note)
 })
 
+const SONG_LIBRARY: SongPreset[] = [
+  {
+    id: 'ode-to-joy',
+    name: 'Ode to Joy (Excerpt)',
+    notes: [
+      { noteId: 'E4', time: 0 },
+      { noteId: 'E4', time: 0.5 },
+      { noteId: 'F4', time: 1 },
+      { noteId: 'G4', time: 1.5 },
+      { noteId: 'G4', time: 2 },
+      { noteId: 'F4', time: 2.5 },
+      { noteId: 'E4', time: 3 },
+      { noteId: 'D4', time: 3.5 },
+      { noteId: 'C4', time: 4 },
+      { noteId: 'C4', time: 4.5 },
+      { noteId: 'D4', time: 5 },
+      { noteId: 'E4', time: 5.5 },
+      { noteId: 'E4', time: 6 },
+      { noteId: 'D4', time: 6.5 },
+      { noteId: 'D4', time: 7 },
+    ],
+  },
+  {
+    id: 'twinkle',
+    name: 'Twinkle Twinkle (Opening)',
+    notes: [
+      { noteId: 'C4', time: 0 },
+      { noteId: 'C4', time: 0.6 },
+      { noteId: 'G4', time: 1.2 },
+      { noteId: 'G4', time: 1.8 },
+      { noteId: 'A4', time: 2.4 },
+      { noteId: 'A4', time: 3 },
+      { noteId: 'G4', time: 3.6, duration: 0.6 },
+      { noteId: 'F4', time: 4.6 },
+      { noteId: 'F4', time: 5.2 },
+      { noteId: 'E4', time: 5.8 },
+      { noteId: 'E4', time: 6.4 },
+      { noteId: 'D4', time: 7 },
+      { noteId: 'D4', time: 7.6 },
+      { noteId: 'C4', time: 8.2, duration: 0.8 },
+    ],
+  },
+  {
+    id: 'happy-birthday',
+    name: 'Happy Birthday (Opening)',
+    notes: [
+      { noteId: 'G4', time: 0 },
+      { noteId: 'G4', time: 0.55 },
+      { noteId: 'A4', time: 1.1 },
+      { noteId: 'G4', time: 1.65 },
+      { noteId: 'C5', time: 2.4 },
+      { noteId: 'B4', time: 3 },
+      { noteId: 'G4', time: 4.2 },
+      { noteId: 'G4', time: 4.75 },
+      { noteId: 'A4', time: 5.3 },
+      { noteId: 'G4', time: 5.9 },
+      { noteId: 'D5', time: 6.6 },
+      { noteId: 'C5', time: 7.3 },
+    ],
+  },
+]
+
+const HERO_FALL_TIME = 3.5
+const HERO_CLEANUP_BUFFER = 0.75
+
+type HeroNoteInstance = {
+  id: string
+  noteId: string
+  progress: number
+  label: string
+  type: 'white' | 'black'
+}
+
 function App() {
+  const [isHeroMode, setIsHeroMode] = useState(false)
+  const [selectedSongId, setSelectedSongId] = useState(SONG_LIBRARY[0]?.id ?? '')
+  const [isHeroPlaying, setIsHeroPlaying] = useState(false)
+  const [activeHeroNotes, setActiveHeroNotes] = useState<HeroNoteInstance[]>([])
   const [activeNotes, setActiveNotes] = useState<Set<string>>(() => new Set())
   const audioContextRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
@@ -209,6 +301,7 @@ function App() {
   const oscillatorsRef = useRef(
     new Map<string, { oscillator: OscillatorNode; gain: GainNode }>(),
   )
+  const heroAnimationRef = useRef<number | null>(null)
 
   const setNoteActive = useCallback((note: NoteDefinition, isActive: boolean) => {
     setActiveNotes((prev) => {
@@ -390,73 +483,291 @@ function App() {
 
   const keyboardGuide = ALL_NOTES.map((note) => note.keyLabel).join(' · ')
 
-  return (
-    <div className="app">
-      <header className="header">
-        <h1>Play It By Key</h1>
-        <p className="description">
-          Tap the keys below or use your computer keyboard to trigger real sine-wave
-          notes. Hold a key to sustain a note and combine keys to create chords.
-        </p>
-        <p className="keyboard-guide">
-          Keyboard mapping: <span>{keyboardGuide}</span>
-        </p>
-      </header>
-      <div className="piano" role="application" aria-label="Virtual piano keyboard">
-        {KEYBOARD_LAYOUT.map(({ white, black }) => {
-          const whiteActive = activeNotes.has(white.id)
-          const blackActive = black ? activeNotes.has(black.id) : false
+  useEffect(() => {
+    if (!isHeroMode) {
+      setIsHeroPlaying(false)
+      setActiveHeroNotes([])
+    }
+  }, [isHeroMode])
 
-          return (
-            <div className="key-column" key={white.id}>
-              <button
-                type="button"
-                className={`key white ${whiteActive ? 'active' : ''}`}
-                aria-label={`${white.note} – press ${white.keyLabel}`}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  handlePointerDown(white)
-                }}
-                onPointerUp={() => handlePointerUp(white)}
-                onPointerLeave={(event) => {
-                  if (event.buttons !== 1) return
-                  handlePointerUp(white)
-                }}
-                onPointerCancel={() => handlePointerUp(white)}
-              >
-                <span className="note-name">{white.displayName}</span>
-                <span className="key-label">{white.keyLabel}</span>
-              </button>
-              {black ? (
+  useEffect(() => {
+    if (!isHeroMode || !isHeroPlaying) {
+      if (heroAnimationRef.current !== null) {
+        cancelAnimationFrame(heroAnimationRef.current)
+        heroAnimationRef.current = null
+      }
+      setActiveHeroNotes([])
+      return
+    }
+
+    const song = SONG_LIBRARY.find((preset) => preset.id === selectedSongId)
+    if (!song) {
+      setIsHeroPlaying(false)
+      return
+    }
+
+    const startTimestamp = performance.now()
+    const lastNoteTime = song.notes.reduce(
+      (latest, note) => Math.max(latest, note.time + (note.duration ?? 0)),
+      0,
+    )
+
+    const step = () => {
+      const now = performance.now()
+      const elapsedSeconds = (now - startTimestamp) / 1000
+
+      const active: HeroNoteInstance[] = []
+
+      song.notes.forEach((event, index) => {
+        const note = NOTE_BY_ID.get(event.noteId)
+        if (!note) return
+
+        const spawnTime = event.time - HERO_FALL_TIME
+        const despawnTime = event.time + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
+        if (elapsedSeconds < spawnTime || elapsedSeconds > despawnTime) {
+          return
+        }
+
+        const progress = (elapsedSeconds - spawnTime) / HERO_FALL_TIME
+        active.push({
+          id: `${song.id}-${index}`,
+          noteId: note.id,
+          progress,
+          label: note.displayName,
+          type: note.type,
+        })
+      })
+
+      setActiveHeroNotes(active)
+
+      if (elapsedSeconds > lastNoteTime + HERO_FALL_TIME + HERO_CLEANUP_BUFFER) {
+        setIsHeroPlaying(false)
+        return
+      }
+
+      heroAnimationRef.current = requestAnimationFrame(step)
+    }
+
+    heroAnimationRef.current = requestAnimationFrame(step)
+
+    return () => {
+      if (heroAnimationRef.current !== null) {
+        cancelAnimationFrame(heroAnimationRef.current)
+        heroAnimationRef.current = null
+      }
+    }
+  }, [isHeroMode, isHeroPlaying, selectedSongId])
+
+  const heroNoteBuckets = useMemo(() => {
+    const bucket = new Map<string, HeroNoteInstance[]>()
+    activeHeroNotes.forEach((note) => {
+      if (!bucket.has(note.noteId)) {
+        bucket.set(note.noteId, [])
+      }
+      bucket.get(note.noteId)!.push(note)
+    })
+    bucket.forEach((notes) => notes.sort((a, b) => a.progress - b.progress))
+    return bucket
+  }, [activeHeroNotes])
+
+  const heroCueNotes = useMemo(() => {
+    const cues = new Set<string>()
+    activeHeroNotes.forEach((note) => {
+      if (note.progress >= 0.85 && note.progress <= 1.1) {
+        cues.add(note.noteId)
+      }
+    })
+    return cues
+  }, [activeHeroNotes])
+
+  const selectedSong = useMemo(
+    () => SONG_LIBRARY.find((preset) => preset.id === selectedSongId) ?? SONG_LIBRARY[0],
+    [selectedSongId],
+  )
+
+  const handleSongSelect = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedSongId(event.target.value)
+    setIsHeroPlaying(false)
+    setActiveHeroNotes([])
+  }
+
+  const handleHeroModeToggle = () => {
+    setIsHeroMode((prev) => {
+      if (prev) {
+        setIsHeroPlaying(false)
+        setActiveHeroNotes([])
+      }
+      return !prev
+    })
+  }
+
+  const handleHeroPlaybackToggle = () => {
+    if (isHeroPlaying) {
+      setIsHeroPlaying(false)
+    } else {
+      setActiveHeroNotes([])
+      setIsHeroPlaying(true)
+    }
+  }
+
+  const renderHeroNotes = (notes: HeroNoteInstance[]) =>
+    notes.map((note) => {
+      const clamped = Math.min(Math.max(note.progress, 0), 1)
+      const isVisible = note.progress >= 0 && note.progress <= 1.05
+      return (
+        <button
+          key={note.id}
+          type="button"
+          className={`hero-note hero-note-${note.type}`}
+          tabIndex={-1}
+          aria-hidden="true"
+          disabled
+          style={{ top: `${clamped * 100}%`, opacity: isVisible ? 1 : 0 }}
+        >
+          {note.label}
+        </button>
+      )
+    })
+
+  return (
+    <div className={`app ${isHeroMode ? 'hero-mode' : ''}`}>
+      <div className="mode-bar">
+        <button
+          type="button"
+          className="mode-toggle"
+          onClick={handleHeroModeToggle}
+        >
+          {isHeroMode ? 'Exit Hero Mode' : 'Enter Hero Mode'}
+        </button>
+        {isHeroMode ? (
+          <div className="hero-controls">
+            <label className="song-picker">
+              <span>Song</span>
+              <select value={selectedSong?.id ?? ''} onChange={handleSongSelect}>
+                {SONG_LIBRARY.map((song) => (
+                  <option key={song.id} value={song.id}>
+                    {song.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="hero-play"
+              onClick={handleHeroPlaybackToggle}
+              disabled={!selectedSong}
+            >
+              {isHeroPlaying ? 'Stop' : 'Start'}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {!isHeroMode ? (
+        <>
+          <header className="header">
+            <h1>Play It By Key</h1>
+            <p className="description">
+              Tap the keys below or use your computer keyboard to trigger real sine-wave
+              notes. Hold a key to sustain a note and combine keys to create chords.
+            </p>
+            <p className="keyboard-guide">
+              Keyboard mapping: <span>{keyboardGuide}</span>
+            </p>
+          </header>
+        </>
+      ) : null}
+      <div
+        className={`piano ${isHeroMode ? 'hero-mode' : ''}`}
+        role="application"
+        aria-label="Virtual piano keyboard"
+      >
+        {isHeroMode ? (
+          <div className="hero-overlay" aria-hidden="true">
+            <div className="hero-lanes">
+              {KEYBOARD_LAYOUT.map(({ white, black }) => {
+                const whiteLaneNotes = heroNoteBuckets.get(white.id) ?? []
+                const blackLaneNotes = black ? heroNoteBuckets.get(black.id) ?? [] : []
+
+                return (
+                  <div className="hero-column" key={`lane-${white.id}`}>
+                    <div className="hero-lane hero-lane-white">
+                      <div className="hero-guideline" />
+                      {renderHeroNotes(whiteLaneNotes)}
+                    </div>
+                    {black ? (
+                      <div className="hero-lane hero-lane-black">
+                        <div className="hero-guideline" />
+                        {renderHeroNotes(blackLaneNotes)}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+        <div className="keybed">
+          {KEYBOARD_LAYOUT.map(({ white, black }) => {
+            const whiteActive = activeNotes.has(white.id)
+            const blackActive = black ? activeNotes.has(black.id) : false
+
+            return (
+              <div className="key-column" key={white.id}>
                 <button
                   type="button"
-                  className={`key black ${blackActive ? 'active' : ''}`}
-                  aria-label={`${black.note} – press ${black.keyLabel}`}
+                  className={`key white ${whiteActive ? 'active' : ''} ${
+                    heroCueNotes.has(white.id) ? 'hero-cue' : ''
+                  }`}
+                  aria-label={`${white.note} – press ${white.keyLabel}`}
                   onPointerDown={(event) => {
                     event.preventDefault()
-                    handlePointerDown(black)
+                    handlePointerDown(white)
                   }}
-                  onPointerUp={() => handlePointerUp(black)}
+                  onPointerUp={() => handlePointerUp(white)}
                   onPointerLeave={(event) => {
                     if (event.buttons !== 1) return
-                    handlePointerUp(black)
+                    handlePointerUp(white)
                   }}
-                  onPointerCancel={() => handlePointerUp(black)}
+                  onPointerCancel={() => handlePointerUp(white)}
                 >
-                  <span className="note-name">{black.displayName}</span>
-                  <span className="key-label">{black.keyLabel}</span>
+                  <span className="note-name">{white.displayName}</span>
+                  <span className="key-label">{white.keyLabel}</span>
                 </button>
-              ) : null}
-            </div>
-          )
-        })}
+                {black ? (
+                  <button
+                    type="button"
+                    className={`key black ${blackActive ? 'active' : ''} ${
+                      heroCueNotes.has(black.id) ? 'hero-cue' : ''
+                    }`}
+                    aria-label={`${black.note} – press ${black.keyLabel}`}
+                    onPointerDown={(event) => {
+                      event.preventDefault()
+                      handlePointerDown(black)
+                    }}
+                    onPointerUp={() => handlePointerUp(black)}
+                    onPointerLeave={(event) => {
+                      if (event.buttons !== 1) return
+                      handlePointerUp(black)
+                    }}
+                    onPointerCancel={() => handlePointerUp(black)}
+                  >
+                    <span className="note-name">{black.displayName}</span>
+                    <span className="key-label">{black.keyLabel}</span>
+                  </button>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
       </div>
-      <footer className="footer">
-        <p>
-          Tip: you can layer harmonies by holding multiple keys. Refresh the page to
-          reinitialize the instrument if the browser suspends audio.
-        </p>
-      </footer>
+      {!isHeroMode ? (
+        <footer className="footer">
+          <p>
+            Tip: you can layer harmonies by holding multiple keys. Refresh the page to
+            reinitialize the instrument if the browser suspends audio.
+          </p>
+        </footer>
+      ) : null}
     </div>
   )
 }

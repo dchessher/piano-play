@@ -19,6 +19,103 @@
   backdrop-filter: blur(12px);
 }
 
+.app.hero-mode {
+  padding: 2rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  min-height: 640px;
+}
+
+.mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.mode-toggle {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), rgba(59, 130, 246, 0.75));
+  color: #0f172a;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.4);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.mode-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.45);
+}
+
+.mode-toggle:focus-visible {
+  outline: 2px solid rgba(191, 219, 254, 0.9);
+  outline-offset: 4px;
+}
+
+.hero-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.song-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.song-picker select {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 0.55rem 0.85rem;
+  min-width: 220px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.song-picker select:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.75);
+  outline-offset: 2px;
+}
+
+.hero-play {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.95), rgba(249, 115, 22, 0.7));
+  color: #0f172a;
+  border: none;
+  border-radius: 14px;
+  padding: 0.6rem 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(234, 88, 12, 0.45);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.hero-play:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(234, 88, 12, 0.5);
+}
+
+.hero-play:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .header h1 {
   margin: 0;
   font-size: clamp(2.1rem, 3vw, 2.9rem);
@@ -52,6 +149,7 @@
   position: relative;
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 2rem 1.75rem;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.75));
   border-radius: 24px;
@@ -60,11 +158,30 @@
   overflow: hidden;
 }
 
-.key-column {
-  position: relative;
-  width: 72px;
+.piano.hero-mode {
+  padding: 1.25rem 1.75rem 1.75rem;
+  align-items: stretch;
+  min-height: 540px;
+}
+
+.keybed {
+  width: 100%;
   display: flex;
   justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.piano.hero-mode .keybed {
+  margin-top: auto;
+}
+
+.key-column {
+  position: relative;
+  width: var(--key-column-width);
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .key {
@@ -84,7 +201,7 @@
 
 .key.white {
   width: 100%;
-  height: 240px;
+  height: var(--white-key-height);
   background: linear-gradient(180deg, #f8fafc 0%, #dee7ff 55%, #cdd7f7 100%);
   border: 1px solid #c7d2fe;
   color: #0f172a;
@@ -102,7 +219,7 @@
   top: 0;
   left: 50%;
   width: 48%;
-  height: 150px;
+  height: var(--black-key-height);
   transform: translateX(-50%);
   background: linear-gradient(180deg, #1f2937 0%, #020617 100%);
   border-radius: 0 0 14px 14px;
@@ -116,6 +233,120 @@
   transform: translateX(-50%) translateY(4px);
   background: linear-gradient(180deg, #111827 0%, #010414 100%);
   box-shadow: inset 0 -4px 8px rgba(15, 23, 42, 0.65), 0 4px 12px rgba(2, 6, 23, 0.65);
+}
+
+.key.hero-cue {
+  animation: heroCuePulse 0.6s ease-in-out infinite alternate;
+}
+
+.key.white.hero-cue {
+  box-shadow: inset 0 -6px 12px rgba(15, 23, 42, 0.3), 0 0 0 3px rgba(224, 231, 255, 0.75),
+    0 18px 32px rgba(59, 130, 246, 0.35);
+}
+
+.key.black.hero-cue {
+  box-shadow: inset 0 -6px 12px rgba(15, 23, 42, 0.65), 0 0 0 3px rgba(94, 234, 212, 0.65),
+    0 18px 30px rgba(13, 148, 136, 0.35);
+}
+
+@keyframes heroCuePulse {
+  from {
+    filter: saturate(1);
+  }
+  to {
+    filter: saturate(1.35);
+  }
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: 1.25rem 1.75rem calc(1.75rem + var(--white-key-height));
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.piano.hero-mode .hero-overlay {
+  opacity: 1;
+}
+
+.hero-lanes {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  height: 100%;
+}
+
+.hero-column {
+  position: relative;
+  width: var(--key-column-width);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.hero-lane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-lane-black {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 48%;
+  transform: translateX(-50%);
+}
+
+.hero-guideline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.55));
+  box-shadow: 0 0 22px rgba(96, 165, 250, 0.25);
+}
+
+.hero-lane-black .hero-guideline {
+  width: 2px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.25), rgba(148, 163, 184, 0.6));
+}
+
+.hero-note {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.42rem 0.75rem;
+  border-radius: 999px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  color: #0f172a;
+  background: linear-gradient(180deg, #fde047, #facc15);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.hero-note:disabled {
+  opacity: 1;
+}
+
+.hero-note-white {
+  min-width: 46px;
+}
+
+.hero-note-black {
+  min-width: 38px;
+  background: linear-gradient(180deg, #fb7185, #f97316);
+  color: #030712;
 }
 
 .note-name {
@@ -136,6 +367,15 @@
   color: rgba(248, 250, 252, 0.7);
 }
 
+.app.hero-mode .note-name,
+.app.hero-mode .key-label {
+  opacity: 0;
+}
+
+.app.hero-mode .mode-bar {
+  margin-bottom: 0;
+}
+
 .footer {
   margin-top: 2.5rem;
   color: #cbd5f5;
@@ -148,26 +388,60 @@
     padding: 2rem;
   }
 
+  .app.hero-mode {
+    padding: 1.75rem 2rem;
+  }
+
   .piano {
     padding: 1.75rem 1.25rem;
   }
 
-  .key-column {
-    width: 62px;
+  .piano.hero-mode {
+    padding: 1rem 1.25rem 1.5rem;
+    min-height: 480px;
   }
 
-  .key.white {
-    height: 210px;
+  .hero-overlay {
+    padding: 1rem 1.25rem calc(1.5rem + var(--white-key-height));
   }
 
-  .key.black {
-    height: 130px;
+  .song-picker select {
+    min-width: 180px;
   }
 }
 
 @media (max-width: 640px) {
   .app {
     padding: 1.5rem;
+  }
+
+  .app.hero-mode {
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .mode-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .hero-controls {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .mode-toggle,
+  .hero-play {
+    width: 100%;
+    text-align: center;
+  }
+
+  .song-picker select {
+    width: 100%;
+    min-width: 0;
   }
 
   .description {
@@ -182,16 +456,13 @@
     padding: 1.25rem 1rem;
   }
 
-  .key-column {
-    width: 48px;
+  .piano.hero-mode {
+    padding: 1rem;
+    min-height: 420px;
   }
 
-  .key.white {
-    height: 170px;
-  }
-
-  .key.black {
-    height: 110px;
+  .hero-overlay {
+    padding: 0.75rem 1rem calc(1rem + var(--white-key-height));
   }
 
   .note-name {
@@ -199,7 +470,11 @@
   }
 
   .key-label {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
+  }
+
+  .hero-note {
+    font-size: 0.76rem;
   }
 }
 
@@ -208,19 +483,20 @@
     padding: 1.25rem;
   }
 
+  .mode-bar {
+    margin-bottom: 1.25rem;
+  }
+
   .piano {
     padding: 1rem 0.75rem;
   }
 
-  .key-column {
-    width: 40px;
+  .piano.hero-mode {
+    padding: 0.85rem;
+    min-height: 360px;
   }
 
-  .key.white {
-    height: 150px;
-  }
-
-  .key.black {
-    height: 95px;
+  .hero-overlay {
+    padding: 0.65rem 0.75rem calc(0.85rem + var(--white-key-height));
   }
 }

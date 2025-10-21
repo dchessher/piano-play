@@ -204,6 +204,8 @@ ALL_NOTES.forEach((note) => {
 function App() {
   const [activeNotes, setActiveNotes] = useState<Set<string>>(() => new Set())
   const audioContextRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const dynamicsRef = useRef<DynamicsCompressorNode | null>(null)
   const oscillatorsRef = useRef(
     new Map<string, { oscillator: OscillatorNode; gain: GainNode }>(),
   )
@@ -237,6 +239,26 @@ function App() {
         audioContext.resume().catch(() => null)
       }
 
+      if (!masterGainRef.current || !dynamicsRef.current) {
+        const masterGain = audioContext.createGain()
+        masterGain.gain.value = 0.5
+
+        const compressor = audioContext.createDynamicsCompressor()
+        compressor.threshold.value = -28
+        compressor.knee.value = 18
+        compressor.ratio.value = 4
+        compressor.attack.value = 0.01
+        compressor.release.value = 0.25
+
+        masterGain.connect(compressor)
+        compressor.connect(audioContext.destination)
+
+        masterGainRef.current = masterGain
+        dynamicsRef.current = compressor
+      }
+
+      const masterGain = masterGainRef.current!
+
       if (oscillatorsRef.current.has(note.id)) {
         return
       }
@@ -249,11 +271,11 @@ function App() {
 
       gainNode.gain.value = 0
       oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
+      gainNode.connect(masterGain)
 
       const now = audioContext.currentTime
       gainNode.gain.setValueAtTime(0, now)
-      gainNode.gain.linearRampToValueAtTime(0.9, now + 0.02)
+      gainNode.gain.linearRampToValueAtTime(0.35, now + 0.03)
 
       oscillator.start(now)
 
@@ -335,7 +357,18 @@ function App() {
         gain.disconnect()
       })
       oscillatorsRef.current.clear()
-      audioContextRef.current?.close()
+      if (audioContextRef.current) {
+        if (dynamicsRef.current) {
+          dynamicsRef.current.disconnect()
+          dynamicsRef.current = null
+        }
+        if (masterGainRef.current) {
+          masterGainRef.current.disconnect()
+          masterGainRef.current = null
+        }
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
     }
   }, [])
 

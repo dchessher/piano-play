@@ -63,6 +63,7 @@
   display: flex;
   align-items: center;
   gap: 1.25rem;
+  flex-wrap: wrap;
 }
 
 .song-picker {
@@ -87,6 +88,32 @@
 }
 
 .song-picker select:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.75);
+  outline-offset: 2px;
+}
+
+.speed-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.speed-picker select {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 0.55rem 0.85rem;
+  min-width: 140px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.speed-picker select:focus-visible {
   outline: 2px solid rgba(148, 163, 184, 0.75);
   outline-offset: 2px;
 }
@@ -409,6 +436,10 @@
   .song-picker select {
     min-width: 180px;
   }
+
+  .speed-picker select {
+    min-width: 140px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -441,6 +472,11 @@
   }
 
   .song-picker select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .speed-picker select {
     width: 100%;
     min-width: 0;
   }

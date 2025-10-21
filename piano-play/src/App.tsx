@@ -24,6 +24,14 @@ type SongPreset = {
   notes: SongNoteEvent[]
 }
 
+const HERO_SPEED_OPTIONS = [
+  { id: 'slow', label: 'Slow', multiplier: 0.75 },
+  { id: 'normal', label: 'Normal', multiplier: 1 },
+  { id: 'fast', label: 'Fast', multiplier: 1.25 },
+] as const
+
+type HeroSpeedOption = (typeof HERO_SPEED_OPTIONS)[number]
+
 type KeyColumn = {
   white: NoteDefinition
   black?: NoteDefinition
@@ -294,6 +302,7 @@ function App() {
   const [selectedSongId, setSelectedSongId] = useState(SONG_LIBRARY[0]?.id ?? '')
   const [isHeroPlaying, setIsHeroPlaying] = useState(false)
   const [activeHeroNotes, setActiveHeroNotes] = useState<HeroNoteInstance[]>([])
+  const [heroSpeedId, setHeroSpeedId] = useState<HeroSpeedOption['id']>('normal')
   const [activeNotes, setActiveNotes] = useState<Set<string>>(() => new Set())
   const audioContextRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
@@ -302,6 +311,12 @@ function App() {
     new Map<string, { oscillator: OscillatorNode; gain: GainNode }>(),
   )
   const heroAnimationRef = useRef<number | null>(null)
+
+  const heroPlaybackRate = useMemo(() => {
+    return (
+      HERO_SPEED_OPTIONS.find((option) => option.id === heroSpeedId)?.multiplier ?? 1
+    )
+  }, [heroSpeedId])
 
   const setNoteActive = useCallback((note: NoteDefinition, isActive: boolean) => {
     setActiveNotes((prev) => {
@@ -515,6 +530,7 @@ function App() {
     const step = () => {
       const now = performance.now()
       const elapsedSeconds = (now - startTimestamp) / 1000
+      const adjustedElapsed = elapsedSeconds * heroPlaybackRate
 
       const active: HeroNoteInstance[] = []
 
@@ -524,11 +540,11 @@ function App() {
 
         const spawnTime = event.time - HERO_FALL_TIME
         const despawnTime = event.time + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
-        if (elapsedSeconds < spawnTime || elapsedSeconds > despawnTime) {
+        if (adjustedElapsed < spawnTime || adjustedElapsed > despawnTime) {
           return
         }
 
-        const progress = (elapsedSeconds - spawnTime) / HERO_FALL_TIME
+        const progress = (adjustedElapsed - spawnTime) / HERO_FALL_TIME
         active.push({
           id: `${song.id}-${index}`,
           noteId: note.id,
@@ -540,7 +556,7 @@ function App() {
 
       setActiveHeroNotes(active)
 
-      if (elapsedSeconds > lastNoteTime + HERO_FALL_TIME + HERO_CLEANUP_BUFFER) {
+      if (adjustedElapsed > lastNoteTime + HERO_FALL_TIME + HERO_CLEANUP_BUFFER) {
         setIsHeroPlaying(false)
         return
       }
@@ -556,7 +572,7 @@ function App() {
         heroAnimationRef.current = null
       }
     }
-  }, [isHeroMode, isHeroPlaying, selectedSongId])
+  }, [heroPlaybackRate, isHeroMode, isHeroPlaying, selectedSongId])
 
   const heroNoteBuckets = useMemo(() => {
     const bucket = new Map<string, HeroNoteInstance[]>()
@@ -588,6 +604,11 @@ function App() {
   const handleSongSelect = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedSongId(event.target.value)
     setIsHeroPlaying(false)
+    setActiveHeroNotes([])
+  }
+
+  const handleHeroSpeedChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setHeroSpeedId(event.target.value as HeroSpeedOption['id'])
     setActiveHeroNotes([])
   }
 
@@ -647,6 +668,16 @@ function App() {
                 {SONG_LIBRARY.map((song) => (
                   <option key={song.id} value={song.id}>
                     {song.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="speed-picker">
+              <span>Speed</span>
+              <select value={heroSpeedId} onChange={handleHeroSpeedChange}>
+                {HERO_SPEED_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>

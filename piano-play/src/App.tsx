@@ -436,6 +436,7 @@ const HERO_PRESPAWN_LEAD = 1
 const HERO_CLEANUP_BUFFER = 0.75
 const HERO_SONG_START_OFFSET = 5
 const HERO_HIT_WINDOW = 0.2
+const HERO_AUTO_PLAY_DEFAULT_HOLD = 0.45
 
 type HeroNoteStatus = 'pending' | 'hit' | 'miss'
 
@@ -457,6 +458,7 @@ function App() {
   const [activeHeroNotes, setActiveHeroNotes] = useState<HeroNoteInstance[]>([])
   const [heroSpeedId, setHeroSpeedId] = useState<HeroSpeedOption['id']>('normal')
   const [heroScore, setHeroScore] = useState(0)
+  const [isHeroAutoPlay, setIsHeroAutoPlay] = useState(false)
   const [activeNotes, setActiveNotes] = useState<Set<string>>(() => new Set())
   const audioContextRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
@@ -469,6 +471,15 @@ function App() {
   const heroPlaybackRateRef = useRef(1)
   const heroNoteStatusRef = useRef<Map<string, HeroNoteStatus>>(new Map())
   const activeHeroNotesRef = useRef<HeroNoteInstance[]>([])
+  const heroAutoPlayNotesRef = useRef(
+    new Map<
+      string,
+      {
+        note: NoteDefinition
+        releaseTime: number
+      }
+    >(),
+  )
 
   const heroPlaybackRate = useMemo(() => {
     return (
@@ -579,9 +590,17 @@ function App() {
     oscillatorsRef.current.delete(note.id)
   }, [])
 
+  const clearHeroAutoPlay = useCallback(() => {
+    heroAutoPlayNotesRef.current.forEach(({ note }) => {
+      stopNote(note)
+      setNoteActive(note, false)
+    })
+    heroAutoPlayNotesRef.current.clear()
+  }, [setNoteActive, stopNote])
+
   const registerHeroInteraction = useCallback(
     (note: NoteDefinition) => {
-      if (!isHeroMode || !isHeroPlaying) {
+      if (!isHeroMode || !isHeroPlaying || isHeroAutoPlay) {
         return
       }
 
@@ -634,7 +653,7 @@ function App() {
         setHeroScore((prev) => prev + 1)
       }
     },
-    [isHeroMode, isHeroPlaying, setActiveHeroNotes, setHeroScore],
+    [isHeroAutoPlay, isHeroMode, isHeroPlaying, setActiveHeroNotes, setHeroScore],
   )
 
   useEffect(() => {
@@ -724,8 +743,15 @@ function App() {
     if (!isHeroMode) {
       setIsHeroPlaying(false)
       setActiveHeroNotes([])
+      clearHeroAutoPlay()
     }
-  }, [isHeroMode])
+  }, [clearHeroAutoPlay, isHeroMode])
+
+  useEffect(() => {
+    if (!isHeroAutoPlay) {
+      clearHeroAutoPlay()
+    }
+  }, [clearHeroAutoPlay, isHeroAutoPlay])
 
   useEffect(() => {
     activeHeroNotesRef.current = activeHeroNotes
@@ -753,6 +779,7 @@ function App() {
       heroStartTimestampRef.current = null
       heroNoteStatusRef.current = new Map()
       setActiveHeroNotes([])
+      clearHeroAutoPlay()
       return
     }
 
@@ -765,6 +792,7 @@ function App() {
     const startTimestamp = performance.now()
     heroStartTimestampRef.current = startTimestamp
     heroNoteStatusRef.current = new Map()
+    heroAutoPlayNotesRef.current.clear()
 
     const lastNoteTime = song.notes.reduce(
       (latest, note) =>
@@ -782,6 +810,8 @@ function App() {
 
       const active: HeroNoteInstance[] = []
 
+      const autoPlayReleases: string[] = []
+
       song.notes.forEach((event, index) => {
         const note = NOTE_BY_ID.get(event.noteId)
         if (!note) return
@@ -798,13 +828,40 @@ function App() {
         if (adjustedElapsed < spawnTime || adjustedElapsed > despawnTime) {
           if (adjustedElapsed > despawnTime) {
             heroNoteStatusRef.current.delete(noteId)
+            const autoEntry = heroAutoPlayNotesRef.current.get(noteId)
+            if (autoEntry) {
+              stopNote(autoEntry.note)
+              setNoteActive(autoEntry.note, false)
+              heroAutoPlayNotesRef.current.delete(noteId)
+            }
           }
           return
         }
 
         const progress = (adjustedElapsed - topArrivalTime) / HERO_FALL_TIME
         const travelProgress = (adjustedElapsed - spawnTime) / totalTravelTime
-        const status = heroNoteStatusRef.current.get(noteId) ?? 'pending'
+        let status = heroNoteStatusRef.current.get(noteId) ?? 'pending'
+
+        if (isHeroAutoPlay && status === 'pending') {
+          if (!heroAutoPlayNotesRef.current.has(noteId) && adjustedElapsed >= scheduledTime) {
+            status = 'hit'
+            heroNoteStatusRef.current.set(noteId, status)
+
+            const holdDuration = Math.max(
+              event.duration ?? 0,
+              HERO_AUTO_PLAY_DEFAULT_HOLD,
+            )
+
+            heroAutoPlayNotesRef.current.set(noteId, {
+              note,
+              releaseTime: scheduledTime + holdDuration,
+            })
+
+            startNote(note)
+            setNoteActive(note, true)
+            setHeroScore((prev) => prev + 1)
+          }
+        }
 
         active.push({
           id: noteId,
@@ -817,6 +874,20 @@ function App() {
           scheduledTime,
         })
       })
+
+      if (isHeroAutoPlay) {
+        heroAutoPlayNotesRef.current.forEach((entry, id) => {
+          if (adjustedElapsed >= entry.releaseTime) {
+            stopNote(entry.note)
+            setNoteActive(entry.note, false)
+            autoPlayReleases.push(id)
+          }
+        })
+
+        autoPlayReleases.forEach((id) => {
+          heroAutoPlayNotesRef.current.delete(id)
+        })
+      }
 
       setActiveHeroNotes(active)
 
@@ -837,7 +908,17 @@ function App() {
       }
       heroStartTimestampRef.current = null
     }
-  }, [heroPlaybackRate, isHeroMode, isHeroPlaying, selectedSongId])
+  }, [
+    clearHeroAutoPlay,
+    heroPlaybackRate,
+    isHeroAutoPlay,
+    isHeroMode,
+    isHeroPlaying,
+    selectedSongId,
+    setNoteActive,
+    startNote,
+    stopNote,
+  ])
 
   const heroNoteBuckets = useMemo(() => {
     const bucket = new Map<string, HeroNoteInstance[]>()
@@ -877,6 +958,7 @@ function App() {
     heroNoteStatusRef.current = new Map()
     heroStartTimestampRef.current = null
     setHeroScore(0)
+    clearHeroAutoPlay()
   }
 
   const handleHeroSpeedChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -885,6 +967,7 @@ function App() {
     heroNoteStatusRef.current = new Map()
     heroStartTimestampRef.current = null
     setHeroScore(0)
+    clearHeroAutoPlay()
   }
 
   const handleHeroModeToggle = () => {
@@ -892,9 +975,11 @@ function App() {
       setIsHeroPlaying(false)
       setActiveHeroNotes([])
       heroStartTimestampRef.current = null
+      clearHeroAutoPlay()
     }
     heroNoteStatusRef.current = new Map()
     setHeroScore(0)
+    setIsHeroAutoPlay(false)
     setIsHeroMode((prev) => !prev)
   }
 
@@ -902,13 +987,19 @@ function App() {
     if (isHeroPlaying) {
       setIsHeroPlaying(false)
       heroStartTimestampRef.current = null
+      clearHeroAutoPlay()
     } else {
       setActiveHeroNotes([])
       heroNoteStatusRef.current = new Map()
       heroStartTimestampRef.current = null
       setHeroScore(0)
       setIsHeroPlaying(true)
+      clearHeroAutoPlay()
     }
+  }
+
+  const handleHeroAutoPlayToggle = () => {
+    setIsHeroAutoPlay((prev) => !prev)
   }
 
   const renderHeroNotes = (notes: HeroNoteInstance[]) =>
@@ -964,6 +1055,14 @@ function App() {
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                className={`hero-autoplay${isHeroAutoPlay ? ' is-active' : ''}`}
+                onClick={handleHeroAutoPlayToggle}
+                aria-pressed={isHeroAutoPlay}
+              >
+                Auto-Play: {isHeroAutoPlay ? 'On' : 'Off'}
+              </button>
               <button
                 type="button"
                 className="hero-play"

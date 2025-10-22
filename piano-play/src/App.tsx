@@ -289,6 +289,7 @@ const SONG_LIBRARY: SongPreset[] = [
 const HERO_FALL_TIME = 3.5
 const HERO_PRESPAWN_LEAD = 1
 const HERO_CLEANUP_BUFFER = 0.75
+const HERO_SONG_START_OFFSET = 5
 
 type HeroNoteInstance = {
   id: string
@@ -538,7 +539,11 @@ function App() {
 
     const startTimestamp = performance.now()
     const lastNoteTime = song.notes.reduce(
-      (latest, note) => Math.max(latest, note.time + (note.duration ?? 0)),
+      (latest, note) =>
+        Math.max(
+          latest,
+          note.time + HERO_SONG_START_OFFSET + (note.duration ?? 0),
+        ),
       0,
     )
 
@@ -555,9 +560,11 @@ function App() {
 
         const heroLeadTime = HERO_PRESPAWN_LEAD * heroPlaybackRate
         const totalTravelTime = HERO_FALL_TIME + heroLeadTime
-        const topArrivalTime = event.time - HERO_FALL_TIME
+        const scheduledTime = event.time + HERO_SONG_START_OFFSET
+        const topArrivalTime = scheduledTime - HERO_FALL_TIME
         const spawnTime = topArrivalTime - heroLeadTime
-        const despawnTime = event.time + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
+        const despawnTime =
+          scheduledTime + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
         if (adjustedElapsed < spawnTime || adjustedElapsed > despawnTime) {
           return
         }

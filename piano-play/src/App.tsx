@@ -294,9 +294,9 @@ type HeroNoteInstance = {
   id: string
   noteId: string
   progress: number
+  travelProgress: number
   label: string
   type: 'white' | 'black'
-  leadRatio: number
 }
 
 function App() {
@@ -508,6 +508,19 @@ function App() {
   }, [isHeroMode])
 
   useEffect(() => {
+    const rootElement = document.getElementById('root')
+    if (!rootElement) {
+      return
+    }
+
+    rootElement.classList.toggle('hero-mode-active', isHeroMode)
+
+    return () => {
+      rootElement.classList.remove('hero-mode-active')
+    }
+  }, [isHeroMode])
+
+  useEffect(() => {
     if (!isHeroMode || !isHeroPlaying) {
       if (heroAnimationRef.current !== null) {
         cancelAnimationFrame(heroAnimationRef.current)
@@ -541,7 +554,7 @@ function App() {
         if (!note) return
 
         const heroLeadTime = HERO_PRESPAWN_LEAD * heroPlaybackRate
-        const leadRatio = heroLeadTime / HERO_FALL_TIME
+        const totalTravelTime = HERO_FALL_TIME + heroLeadTime
         const topArrivalTime = event.time - HERO_FALL_TIME
         const spawnTime = topArrivalTime - heroLeadTime
         const despawnTime = event.time + (event.duration ?? 0) + HERO_CLEANUP_BUFFER
@@ -550,13 +563,15 @@ function App() {
         }
 
         const progress = (adjustedElapsed - topArrivalTime) / HERO_FALL_TIME
+        const travelProgress = (adjustedElapsed - spawnTime) / totalTravelTime
+
         active.push({
           id: `${song.id}-${index}`,
           noteId: note.id,
           progress,
+          travelProgress,
           label: note.displayName,
           type: note.type,
-          leadRatio,
         })
       })
 
@@ -588,7 +603,7 @@ function App() {
       }
       bucket.get(note.noteId)!.push(note)
     })
-    bucket.forEach((notes) => notes.sort((a, b) => a.progress - b.progress))
+    bucket.forEach((notes) => notes.sort((a, b) => a.travelProgress - b.travelProgress))
     return bucket
   }, [activeHeroNotes])
 
@@ -639,8 +654,8 @@ function App() {
 
   const renderHeroNotes = (notes: HeroNoteInstance[]) =>
     notes.map((note) => {
-      const isVisible = note.progress >= -note.leadRatio && note.progress <= 1.05
-      const topPercent = note.progress * 100
+      const isVisible = note.travelProgress >= -0.05 && note.travelProgress <= 1.05
+      const topPercent = note.travelProgress * 100
       return (
         <button
           key={note.id}

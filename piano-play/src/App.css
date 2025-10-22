@@ -8,6 +8,13 @@
   box-sizing: border-box;
 }
 
+#root.hero-mode-active {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
 .app {
   width: min(960px, 100%);
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.65));
@@ -25,6 +32,11 @@
   flex-direction: column;
   gap: 1.75rem;
   min-height: 640px;
+  align-self: stretch;
+}
+
+#root.hero-mode-active .app.hero-mode {
+  min-height: calc(100vh - 3rem);
 }
 
 .mode-bar {
@@ -191,6 +203,11 @@
   min-height: 540px;
 }
 
+#root.hero-mode-active .app.hero-mode .piano.hero-mode {
+  flex: 1;
+  min-height: 0;
+}
+
 .keybed {
   width: 100%;
   display: flex;
@@ -295,6 +312,10 @@
   align-items: flex-start;
   opacity: 0;
   transition: opacity 0.2s ease;
+}
+
+#root.hero-mode-active .piano.hero-mode .hero-overlay {
+  padding: 0 1.75rem calc(1.75rem + var(--white-key-height));
 }
 
 .piano.hero-mode .hero-overlay {

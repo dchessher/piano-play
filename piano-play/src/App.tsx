@@ -32,6 +32,119 @@ const HERO_SPEED_OPTIONS = [
 
 type HeroSpeedOption = (typeof HERO_SPEED_OPTIONS)[number]
 
+type InstrumentOption = {
+  id: string
+  label: string
+  oscillatorType: OscillatorType
+  attack: number
+  decay: number
+  sustain: number
+  release: number
+  peak: number
+  detuneCents?: number
+  vibrato?: {
+    frequency: number
+    depth: number
+  }
+  filter?: {
+    type: BiquadFilterType
+    frequency: number
+    q?: number
+  }
+}
+
+const INSTRUMENT_OPTIONS: InstrumentOption[] = [
+  {
+    id: 'piano',
+    label: 'Piano',
+    oscillatorType: 'sine',
+    attack: 0.02,
+    decay: 0.18,
+    sustain: 0.28,
+    release: 0.35,
+    peak: 0.45,
+  },
+  {
+    id: 'string-piano',
+    label: 'String Piano',
+    oscillatorType: 'sawtooth',
+    attack: 0.03,
+    decay: 0.22,
+    sustain: 0.32,
+    release: 0.5,
+    peak: 0.5,
+    detuneCents: 4,
+    filter: {
+      type: 'lowpass',
+      frequency: 3400,
+      q: 0.8,
+    },
+  },
+  {
+    id: 'electric-piano',
+    label: 'Electric Piano',
+    oscillatorType: 'triangle',
+    attack: 0.015,
+    decay: 0.12,
+    sustain: 0.24,
+    release: 0.4,
+    peak: 0.4,
+    vibrato: {
+      frequency: 5.5,
+      depth: 8,
+    },
+  },
+  {
+    id: 'violin',
+    label: 'Violin',
+    oscillatorType: 'sawtooth',
+    attack: 0.08,
+    decay: 0.35,
+    sustain: 0.4,
+    release: 0.6,
+    peak: 0.55,
+    vibrato: {
+      frequency: 6.5,
+      depth: 12,
+    },
+    filter: {
+      type: 'lowpass',
+      frequency: 2800,
+      q: 1.1,
+    },
+  },
+  {
+    id: 'trumpet',
+    label: 'Trumpet',
+    oscillatorType: 'square',
+    attack: 0.04,
+    decay: 0.2,
+    sustain: 0.35,
+    release: 0.45,
+    peak: 0.52,
+    filter: {
+      type: 'bandpass',
+      frequency: 1800,
+      q: 0.9,
+    },
+  },
+  {
+    id: 'saxophone',
+    label: 'Saxophone',
+    oscillatorType: 'sawtooth',
+    attack: 0.06,
+    decay: 0.28,
+    sustain: 0.38,
+    release: 0.55,
+    peak: 0.48,
+    filter: {
+      type: 'bandpass',
+      frequency: 1400,
+      q: 1.2,
+    },
+  },
+]
+
 type KeyColumn = {
   white: NoteDefinition
   black?: NoteDefinition
@@ -451,6 +564,15 @@ type HeroNoteInstance = {
   scheduledTime: number
 }
 
+type ActiveNoteNodes = {
+  oscillator: OscillatorNode
+  gain: GainNode
+  release: number
+  vibratoOscillator?: OscillatorNode
+  vibratoGain?: GainNode
+  filter?: BiquadFilterNode
+}
+
 function App() {
   const [isHeroMode, setIsHeroMode] = useState(false)
   const [selectedSongId, setSelectedSongId] = useState(SONG_LIBRARY[0]?.id ?? '')
@@ -460,12 +582,13 @@ function App() {
   const [heroScore, setHeroScore] = useState(0)
   const [isHeroAutoPlay, setIsHeroAutoPlay] = useState(false)
   const [activeNotes, setActiveNotes] = useState<Set<string>>(() => new Set())
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState(
+    INSTRUMENT_OPTIONS[0]?.id ?? 'piano',
+  )
   const audioContextRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
   const dynamicsRef = useRef<DynamicsCompressorNode | null>(null)
-  const oscillatorsRef = useRef(
-    new Map<string, { oscillator: OscillatorNode; gain: GainNode }>(),
-  )
+  const oscillatorsRef = useRef(new Map<string, ActiveNoteNodes>())
   const heroAnimationRef = useRef<number | null>(null)
   const heroStartTimestampRef = useRef<number | null>(null)
   const heroPlaybackRateRef = useRef(1)
@@ -490,6 +613,19 @@ function App() {
   useEffect(() => {
     heroPlaybackRateRef.current = heroPlaybackRate
   }, [heroPlaybackRate])
+
+  const selectedInstrument = useMemo(() => {
+    return (
+      INSTRUMENT_OPTIONS.find((instrument) => instrument.id === selectedInstrumentId) ??
+      INSTRUMENT_OPTIONS[0]
+    )
+  }, [selectedInstrumentId])
+
+  const instrumentRef = useRef<InstrumentOption>(INSTRUMENT_OPTIONS[0])
+
+  useEffect(() => {
+    instrumentRef.current = selectedInstrument
+  }, [selectedInstrument])
 
   const setNoteActive = useCallback((note: NoteDefinition, isActive: boolean) => {
     setActiveNotes((prev) => {
@@ -544,23 +680,63 @@ function App() {
         return
       }
 
+      const instrument = instrumentRef.current
       const oscillator = audioContext.createOscillator()
       const gainNode = audioContext.createGain()
 
-      oscillator.type = 'sine'
+      oscillator.type = instrument.oscillatorType
       oscillator.frequency.value = note.frequency
+      if (typeof instrument.detuneCents === 'number') {
+        oscillator.detune.value = instrument.detuneCents
+      }
+
+      let filterNode: BiquadFilterNode | undefined
+      if (instrument.filter) {
+        filterNode = audioContext.createBiquadFilter()
+        filterNode.type = instrument.filter.type
+        filterNode.frequency.value = instrument.filter.frequency
+        if (typeof instrument.filter.q === 'number') {
+          filterNode.Q.value = instrument.filter.q
+        }
+        oscillator.connect(filterNode)
+        filterNode.connect(gainNode)
+      } else {
+        oscillator.connect(gainNode)
+      }
 
       gainNode.gain.value = 0
-      oscillator.connect(gainNode)
       gainNode.connect(masterGain)
 
       const now = audioContext.currentTime
+      gainNode.gain.cancelScheduledValues(now)
       gainNode.gain.setValueAtTime(0, now)
-      gainNode.gain.linearRampToValueAtTime(0.35, now + 0.03)
+      const attackEnd = now + instrument.attack
+      const decayEnd = attackEnd + instrument.decay
+      gainNode.gain.linearRampToValueAtTime(instrument.peak, attackEnd)
+      gainNode.gain.linearRampToValueAtTime(instrument.sustain, decayEnd)
+
+      let vibratoOscillator: OscillatorNode | undefined
+      let vibratoGain: GainNode | undefined
+      if (instrument.vibrato) {
+        vibratoOscillator = audioContext.createOscillator()
+        vibratoGain = audioContext.createGain()
+        vibratoOscillator.frequency.value = instrument.vibrato.frequency
+        vibratoGain.gain.value = instrument.vibrato.depth
+        vibratoOscillator.connect(vibratoGain)
+        vibratoGain.connect(oscillator.frequency)
+        vibratoOscillator.start(now)
+      }
 
       oscillator.start(now)
 
-      oscillatorsRef.current.set(note.id, { oscillator, gain: gainNode })
+      oscillatorsRef.current.set(note.id, {
+        oscillator,
+        gain: gainNode,
+        release: instrument.release,
+        vibratoOscillator,
+        vibratoGain,
+        filter: filterNode,
+      })
     },
     [],
   )
@@ -573,19 +749,32 @@ function App() {
       return
     }
 
-    const { oscillator, gain } = nodes
+    const { oscillator, gain, release, vibratoGain, vibratoOscillator, filter } = nodes
     const now = audioContext.currentTime
 
     gain.gain.cancelScheduledValues(now)
     const currentValue = gain.gain.value
     gain.gain.setValueAtTime(currentValue, now)
-    gain.gain.linearRampToValueAtTime(0.0001, now + 0.12)
+    const releaseTime = Math.max(release, 0.08)
+    gain.gain.linearRampToValueAtTime(0.0001, now + releaseTime)
 
-    oscillator.stop(now + 0.12)
+    if (vibratoGain) {
+      vibratoGain.gain.cancelScheduledValues(now)
+      const vibratoCurrent = vibratoGain.gain.value
+      vibratoGain.gain.setValueAtTime(vibratoCurrent, now)
+      vibratoGain.gain.linearRampToValueAtTime(0, now + Math.min(releaseTime, 0.2))
+    }
+
+    const stopTime = now + releaseTime
+    oscillator.stop(stopTime)
+    vibratoOscillator?.stop(stopTime)
     setTimeout(() => {
       oscillator.disconnect()
       gain.disconnect()
-    }, 200)
+      filter?.disconnect()
+      vibratoOscillator?.disconnect()
+      vibratoGain?.disconnect()
+    }, (releaseTime + 0.1) * 1000)
 
     oscillatorsRef.current.delete(note.id)
   }, [])
@@ -597,6 +786,10 @@ function App() {
     })
     heroAutoPlayNotesRef.current.clear()
   }, [setNoteActive, stopNote])
+
+  const handleInstrumentChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedInstrumentId(event.target.value)
+  }
 
   const registerHeroInteraction = useCallback(
     (note: NoteDefinition) => {
@@ -695,15 +888,20 @@ function App() {
 
   useEffect(() => {
     return () => {
-      oscillatorsRef.current.forEach(({ oscillator, gain }) => {
-        try {
-          oscillator.stop()
-        } catch (error) {
-          // ignore errors from already stopped oscillators
-        }
-        oscillator.disconnect()
-        gain.disconnect()
-      })
+      oscillatorsRef.current.forEach(
+        ({ oscillator, gain, vibratoOscillator, vibratoGain, filter }) => {
+          try {
+            oscillator.stop()
+          } catch (error) {
+            // ignore errors from already stopped oscillators
+          }
+          oscillator.disconnect()
+          gain.disconnect()
+          filter?.disconnect()
+          vibratoOscillator?.disconnect()
+          vibratoGain?.disconnect()
+        },
+      )
       oscillatorsRef.current.clear()
       if (audioContextRef.current) {
         if (dynamicsRef.current) {
@@ -1032,52 +1230,64 @@ function App() {
         >
           {isHeroMode ? 'Exit Hero Mode' : 'Enter Hero Mode'}
         </button>
-        {isHeroMode ? (
-          <div className="hero-bar-right">
-            <div className="hero-controls">
-              <label className="song-picker">
-                <span>Song</span>
-                <select value={selectedSong?.id ?? ''} onChange={handleSongSelect}>
-                  {SONG_LIBRARY.map((song) => (
-                    <option key={song.id} value={song.id}>
-                      {song.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="speed-picker">
-                <span>Speed</span>
-                <select value={heroSpeedId} onChange={handleHeroSpeedChange}>
-                  {HERO_SPEED_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={`hero-autoplay${isHeroAutoPlay ? ' is-active' : ''}`}
-                onClick={handleHeroAutoPlayToggle}
-                aria-pressed={isHeroAutoPlay}
-              >
-                Auto-Play: {isHeroAutoPlay ? 'On' : 'Off'}
-              </button>
-              <button
-                type="button"
-                className="hero-play"
-                onClick={handleHeroPlaybackToggle}
-                disabled={!selectedSong}
-              >
-                {isHeroPlaying ? 'Stop' : 'Start'}
-              </button>
+        <div className="mode-bar-right">
+          <label className="instrument-picker">
+            <span>Instrument</span>
+            <select value={selectedInstrumentId} onChange={handleInstrumentChange}>
+              {INSTRUMENT_OPTIONS.map((instrumentOption) => (
+                <option key={instrumentOption.id} value={instrumentOption.id}>
+                  {instrumentOption.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {isHeroMode ? (
+            <div className="hero-bar-right">
+              <div className="hero-controls">
+                <label className="song-picker">
+                  <span>Song</span>
+                  <select value={selectedSong?.id ?? ''} onChange={handleSongSelect}>
+                    {SONG_LIBRARY.map((song) => (
+                      <option key={song.id} value={song.id}>
+                        {song.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="speed-picker">
+                  <span>Speed</span>
+                  <select value={heroSpeedId} onChange={handleHeroSpeedChange}>
+                    {HERO_SPEED_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={`hero-autoplay${isHeroAutoPlay ? ' is-active' : ''}`}
+                  onClick={handleHeroAutoPlayToggle}
+                  aria-pressed={isHeroAutoPlay}
+                >
+                  Auto-Play: {isHeroAutoPlay ? 'On' : 'Off'}
+                </button>
+                <button
+                  type="button"
+                  className="hero-play"
+                  onClick={handleHeroPlaybackToggle}
+                  disabled={!selectedSong}
+                >
+                  {isHeroPlaying ? 'Stop' : 'Start'}
+                </button>
+              </div>
+              <div className="hero-score" aria-live="polite">
+                <span className="hero-score-label">Score</span>
+                <span className="hero-score-value">{heroScore}</span>
+              </div>
             </div>
-            <div className="hero-score" aria-live="polite">
-              <span className="hero-score-label">Score</span>
-              <span className="hero-score-value">{heroScore}</span>
-            </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
       {!isHeroMode ? (
         <>

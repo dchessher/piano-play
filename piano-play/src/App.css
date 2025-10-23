@@ -47,6 +47,15 @@
   margin-bottom: 2rem;
 }
 
+.mode-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .mode-toggle {
   background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), rgba(59, 130, 246, 0.75));
   color: #0f172a;
@@ -78,8 +87,33 @@
   flex-wrap: wrap;
 }
 
+.instrument-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.instrument-picker select {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 0.55rem 0.85rem;
+  min-width: 180px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.instrument-picker select:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.75);
+  outline-offset: 2px;
+}
+
 .hero-bar-right {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 1.75rem;
@@ -553,6 +587,10 @@
     min-width: 140px;
   }
 
+  .instrument-picker select {
+    min-width: 160px;
+  }
+
   .hero-bar-right {
     gap: 1.25rem;
   }
@@ -574,11 +612,23 @@
     gap: 1rem;
   }
 
+  .mode-bar-right {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
   .hero-controls {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
     gap: 0.75rem;
+  }
+
+  .instrument-picker select {
+    width: 100%;
+    min-width: 0;
   }
 
   .hero-bar-right {
